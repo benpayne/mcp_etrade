@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp_etrade"
+version = "1.0.0"
+description = "E*TRADE MCP Server with OAuth, risk management, and trading tools"
+authors = [{name = "davdunc", email = "your-email@example.com"}]
+license = {text = "GPL-3.0"}
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "mcp>=1.0.0",
+    "httpx>=0.25.0",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/davdunc/mcp_etrade"
+Repository = "https://github.com/davdunc/mcp_etrade.git"
+Issues = "https://github.com/davdunc/mcp_etrade/issues"
+
+[project.scripts]
+mcp_etrade = "mcp_etrade.server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mcp_etrade*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

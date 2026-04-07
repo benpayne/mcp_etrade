@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
+import time
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
@@ -8,6 +9,7 @@ import json
 from .config import Config
 from .oauth import ETradeOAuth
 from .risk_guardrails import risk_manager
+from . import watchlists
 
 app = Server("mcp-etrade")
 config = Config()
@@ -17,7 +19,7 @@ if config.is_configured:
     oauth_client = ETradeOAuth(
         config.oauth_consumer_key,
         config.oauth_consumer_secret,
-        config.get("sandbox", True)
+        config.sandbox
     )
 
 @app.list_tools()
@@ -63,12 +65,17 @@ async def list_tools() -> list[Tool]:
             inputSchema={"type": "object", "properties": {}}
         ),
         Tool(
+            name="list_accounts",
+            description="List all E*TRADE accounts for the authenticated user. Returns accountId and accountIdKey — use accountIdKey for all other account tools.",
+            inputSchema={"type": "object", "properties": {}}
+        ),
+        Tool(
             name="get_account_balance",
             description="Get account balance from E*TRADE",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "account_id": {"type": "string", "description": "E*TRADE account ID"},
+                    "account_id": {"type": "string", "description": "E*TRADE accountIdKey (from list_accounts)"},
                     "instType": {"type": "string", "description": "Institution type", "enum": ["BROKERAGE"]},
                     "accountType": {"type": "string", "description": "Account type (optional)"},
                     "realTimeNAV": {"type": "boolean", "description": "Fetch real time balance"}
@@ -82,7 +89,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "account_id": {"type": "string", "description": "E*TRADE account ID"},
+                    "account_id": {"type": "string", "description": "E*TRADE accountIdKey (from list_accounts)"},
                     "startDate": {"type": "string", "description": "Start date in MMDDYYYY format"},
                     "endDate": {"type": "string", "description": "End date in MMDDYYYY format"},
                     "sortOrder": {"type": "string", "description": "Sort order", "enum": ["ASC", "DESC"]},
@@ -97,7 +104,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "account_id": {"type": "string", "description": "E*TRADE account ID"},
+                    "account_id": {"type": "string", "description": "E*TRADE accountIdKey (from list_accounts)"},
                     "transaction_id": {"type": "string", "description": "Transaction ID"}
                 },
                 "required": ["account_id", "transaction_id"]
@@ -147,7 +154,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "account_id": {"type": "string", "description": "E*TRADE account ID"},
+                    "account_id": {"type": "string", "description": "E*TRADE accountIdKey (from list_accounts)"},
                     "count": {"type": "integer", "description": "Number of positions (default 50)", "minimum": 1},
                     "sortBy": {"type": "string", "description": "Sort by field"},
                     "sortOrder": {"type": "string", "description": "Sort order", "enum": ["ASC", "DESC"]},
@@ -221,7 +228,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "account_id": {"type": "string", "description": "E*TRADE account ID"},
+                    "account_id": {"type": "string", "description": "E*TRADE accountIdKey (from list_accounts)"},
                     "risk_percentage": {"type": "number", "description": "Risk percentage of account balance (default 1.0)", "default": 1.0}
                 },
                 "required": ["account_id"]
@@ -233,7 +240,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "account_id": {"type": "string", "description": "E*TRADE account ID"},
+                    "account_id": {"type": "string", "description": "E*TRADE accountIdKey (from list_accounts)"},
                     "name": {"type": "string", "description": "Watch list name"},
                     "symbols": {"type": "array", "items": {"type": "string"}, "description": "List of symbols to add"}
                 },
@@ -246,7 +253,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "account_id": {"type": "string", "description": "E*TRADE account ID"}
+                    "account_id": {"type": "string", "description": "E*TRADE accountIdKey (from list_accounts)"}
                 },
                 "required": ["account_id"]
             }
@@ -257,7 +264,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "account_id": {"type": "string", "description": "E*TRADE account ID"},
+                    "account_id": {"type": "string", "description": "E*TRADE accountIdKey (from list_accounts)"},
                     "watch_list_id": {"type": "string", "description": "Watch list ID"},
                     "name": {"type": "string", "description": "New watch list name"},
                     "symbols": {"type": "array", "items": {"type": "string"}, "description": "Updated list of symbols"}
@@ -271,7 +278,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "account_id": {"type": "string", "description": "E*TRADE account ID"},
+                    "account_id": {"type": "string", "description": "E*TRADE accountIdKey (from list_accounts)"},
                     "watch_list_id": {"type": "string", "description": "Watch list ID to delete"}
                 },
                 "required": ["account_id", "watch_list_id"]
@@ -283,7 +290,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "account_id": {"type": "string", "description": "E*TRADE account ID"},
+                    "account_id": {"type": "string", "description": "E*TRADE accountIdKey (from list_accounts)"},
                     "order_value": {"type": "number", "description": "Total order value in dollars"},
                     "risk_amount": {"type": "number", "description": "Risk amount (stop loss distance * shares)"},
                     "risk_percentage": {"type": "number", "description": "Daily risk percentage (default 1.0)", "default": 1.0}
@@ -297,7 +304,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "account_id": {"type": "string", "description": "E*TRADE account ID"},
+                    "account_id": {"type": "string", "description": "E*TRADE accountIdKey (from list_accounts)"},
                     "risk_percentage": {"type": "number", "description": "Daily risk percentage (default 1.0)", "default": 1.0},
                     "current_daily_loss": {"type": "number", "description": "Current actual daily losses from Colosseum", "default": 0.0}
                 },
@@ -310,7 +317,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "account_id": {"type": "string", "description": "E*TRADE account ID"},
+                    "account_id": {"type": "string", "description": "E*TRADE accountIdKey (from list_accounts)"},
                     "loss_amount": {"type": "number", "description": "Actual loss amount (positive number)"}
                 },
                 "required": ["account_id", "loss_amount"]
@@ -326,376 +333,190 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             text="Error: E*TRADE OAuth credentials not configured. Set ETRADE_OAUTH_CONSUMER_KEY and ETRADE_OAUTH_CONSUMER_SECRET environment variables."
         )]
     
+    def _ok(payload):
+        return [TextContent(type="text", text=json.dumps(payload, indent=2, default=str))]
+
+    async def _fetch_balance_numbers(account_id_key: str) -> tuple[float, float]:
+        """Return (account_balance, cash_available_for_investment) from the live API."""
+        resp = await oauth_client.request(
+            "GET",
+            f"/v1/accounts/{account_id_key}/balance.json",
+            params={"instType": "BROKERAGE", "realTimeNAV": True},
+        )
+        br = resp.get("BalanceResponse", resp) if isinstance(resp, dict) else {}
+        computed = br.get("Computed", {}) if isinstance(br, dict) else {}
+        rtv = computed.get("RealTimeValues", {}) if isinstance(computed, dict) else {}
+        account_balance = float(
+            rtv.get("totalAccountValue")
+            or computed.get("accountBalance")
+            or computed.get("cashAvailableForInvestment")
+            or 0.0
+        )
+        cash_available = float(computed.get("cashAvailableForInvestment") or account_balance)
+        return account_balance, cash_available
+
     try:
         if name == "get_request_token":
             result = await oauth_client.get_request_token()
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
-        
+            return _ok(result)
+
         elif name == "get_authorization_url":
             url = oauth_client.get_authorization_url(arguments["oauth_token"])
-            return [TextContent(type="text", text=json.dumps({"authorization_url": url}, indent=2))]
-        
+            return _ok({"authorization_url": url})
+
         elif name == "get_access_token":
             result = await oauth_client.get_access_token(
                 arguments["request_token"],
                 arguments["request_token_secret"],
-                arguments["verifier"]
+                arguments["verifier"],
             )
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
-        
+            return _ok(result)
+
         elif name == "renew_access_token":
-            result = await oauth_client.renew_access_token()
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
-        
+            return _ok(await oauth_client.renew_access_token())
+
         elif name == "revoke_access_token":
-            result = await oauth_client.revoke_access_token()
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+            return _ok(await oauth_client.revoke_access_token())
+
+        elif name == "list_accounts":
+            return _ok(await oauth_client.request("GET", "/v1/accounts/list.json"))
         
         elif name == "get_account_balance":
-            account_id = arguments["account_id"]
-            # TODO: Use oauth_client.access_token for authenticated API calls
-            result = {
-                "accountId": account_id,
-                "institutionType": "BROKERAGE",
-                "asOfDate": 1527134400000,
-                "accountType": "PDT_ACCOUNT",
-                "optionLevel": "LEVEL_2",
-                "accountDescription": "Individual Brokerage Account",
-                "quoteMode": 0,
-                "dayTraderStatus": "PDT",
-                "accountMode": "MARGIN",
-                "accountDesc": "Individual Brokerage Account",
-                "cash": {
-                    "fundsForOpenOrdersCash": 0.0,
-                    "moneyMktBalance": 10000.00
-                },
-                "computedBalance": {
-                    "cashAvailableForInvestment": 10000.00,
-                    "cashAvailableForWithdrawal": 10000.00,
-                    "totalAvailableForWithdrawal": 10000.00,
-                    "netCash": 10000.00,
-                    "cashBalance": 10000.00,
-                    "accountBalance": 10000.00
-                },
-                "authenticated": bool(oauth_client.access_token)
+            account_id_key = arguments["account_id"]
+            params = {
+                "instType": arguments.get("instType", "BROKERAGE"),
+                "realTimeNAV": arguments.get("realTimeNAV", True),
             }
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+            if "accountType" in arguments:
+                params["accountType"] = arguments["accountType"]
+            return _ok(
+                await oauth_client.request(
+                    "GET", f"/v1/accounts/{account_id_key}/balance.json", params=params
+                )
+            )
         
         elif name == "list_transactions":
-            account_id = arguments["account_id"]
-            # TODO: Use oauth_client.access_token for authenticated API calls
-            result = {
-                "transactionId": 18144100000861,
-                "accountId": account_id,
-                "transactionDate": 1527134400000,
-                "postDate": 1527134400000,
-                "amount": -2.0,
-                "description": "ACH WITHDRAWL REFID:77521276;",
-                "category": {
-                    "categoryId": 0,
-                    "parentId": 0,
-                    "categoryName": "",
-                    "parentName": ""
-                },
-                "brokerage": {
-                    "transactionType": "Transfer",
-                    "product": {},
-                    "quantity": 0.0,
-                    "price": 0.0,
-                    "settlementCurrency": "USD",
-                    "paymentCurrency": "USD",
-                    "fee": 0.0,
-                    "memo": "",
-                    "orderNo": 0
-                },
-                "authenticated": bool(oauth_client.access_token)
+            account_id_key = arguments["account_id"]
+            params = {
+                k: arguments[k]
+                for k in ("startDate", "endDate", "sortOrder", "count")
+                if k in arguments
             }
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
-        
+            return _ok(
+                await oauth_client.request(
+                    "GET", f"/v1/accounts/{account_id_key}/transactions.json", params=params
+                )
+            )
+
         elif name == "get_transaction_details":
-            account_id = arguments["account_id"]
+            account_id_key = arguments["account_id"]
             transaction_id = arguments["transaction_id"]
-            # TODO: Use oauth_client.access_token for authenticated API calls
-            result = {
-                "transactionId": int(transaction_id),
-                "accountId": account_id,
-                "transactionDate": 1527134400000,
-                "postDate": 1527134400000,
-                "amount": -2.0,
-                "description": "ACH WITHDRAWL REFID:77521276;",
-                "category": {
-                    "categoryId": 0,
-                    "parentId": 0,
-                    "categoryName": "",
-                    "parentName": ""
-                },
-                "brokerage": {
-                    "transactionType": "Transfer",
-                    "product": {},
-                    "quantity": 0.0,
-                    "price": 0.0,
-                    "settlementCurrency": "USD",
-                    "paymentCurrency": "USD",
-                    "fee": 0.0,
-                    "memo": "",
-                    "orderNo": 0
-                },
-                "authenticated": bool(oauth_client.access_token)
-            }
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
-        
+            return _ok(
+                await oauth_client.request(
+                    "GET",
+                    f"/v1/accounts/{account_id_key}/transactions/{transaction_id}.json",
+                )
+            )
+
         elif name == "list_alerts":
-            # TODO: Use oauth_client.access_token for authenticated API calls
-            result = {
-                "totalAlerts": 2,
-                "alerts": [
-                    {
-                        "id": 6774,
-                        "createTime": 1529426402,
-                        "subject": "Transfer failed-Insufficient Funds",
-                        "status": "UNREAD"
-                    },
-                    {
-                        "id": 6775,
-                        "createTime": 1529426500,
-                        "subject": "Stock Alert: AAPL reached target price",
-                        "status": "READ"
-                    }
-                ],
-                "authenticated": bool(oauth_client.access_token)
+            params = {
+                k: arguments[k]
+                for k in ("count", "category", "status", "direction", "search")
+                if k in arguments
             }
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
-        
+            return _ok(
+                await oauth_client.request("GET", "/v1/user/alerts.json", params=params)
+            )
+
         elif name == "delete_alerts":
             alert_ids = arguments["alert_ids"]
-            # TODO: Use oauth_client.access_token for authenticated API calls
-            result = {
-                "result": "SUCCESS",
-                "deletedAlerts": alert_ids.split(","),
-                "authenticated": bool(oauth_client.access_token)
-            }
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
-        
+            return _ok(
+                await oauth_client.request("DELETE", f"/v1/user/alerts/{alert_ids}.json")
+            )
+
         elif name == "get_alert_details":
             alert_id = arguments["alert_id"]
-            # TODO: Use oauth_client.access_token for authenticated API calls
-            result = {
-                "id": int(alert_id),
-                "createTime": 1529426402,
-                "subject": "Transfer failed-Insufficient Funds",
-                "status": "UNREAD",
-                "msgText": "Your transfer request could not be completed due to insufficient funds.",
-                "readTime": 0,
-                "deleteTime": 0,
-                "symbol": "",
-                "authenticated": bool(oauth_client.access_token)
-            }
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+            params = {}
+            if "htmlTags" in arguments:
+                params["htmlTags"] = arguments["htmlTags"]
+            return _ok(
+                await oauth_client.request(
+                    "GET", f"/v1/user/alerts/{alert_id}.json", params=params
+                )
+            )
         
         elif name == "view_portfolio":
-            account_id = arguments["account_id"]
-            # TODO: Use oauth_client.access_token for authenticated API calls
-            result = {
-                "accountPortfolio": [
-                    {
-                        "accountId": account_id,
-                        "position": [
-                            {
-                                "positionId": 12345,
-                                "accountId": account_id,
-                                "product": {
-                                    "symbol": "AAPL",
-                                    "securityType": "EQ"
-                                },
-                                "symbolDescription": "APPLE INC COM",
-                                "dateAcquired": 1527134400000,
-                                "pricePaid": 150.00,
-                                "price": 175.00,
-                                "quantity": 100,
-                                "marketValue": 17500.00,
-                                "totalCost": 15000.00,
-                                "totalGain": 2500.00,
-                                "totalGainPct": 16.67
-                            }
-                        ]
-                    }
-                ],
-                "authenticated": bool(oauth_client.access_token)
+            account_id_key = arguments["account_id"]
+            params = {
+                k: arguments[k]
+                for k in ("count", "sortBy", "sortOrder", "view")
+                if k in arguments
             }
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+            return _ok(
+                await oauth_client.request(
+                    "GET", f"/v1/accounts/{account_id_key}/portfolio.json", params=params
+                )
+            )
         
         elif name == "get_option_chains":
-            symbol = arguments["symbol"]
-            # TODO: Use oauth_client.access_token for authenticated API calls
-            result = {
-                "OptionChainResponse": {
-                    "OptionPair": [
-                        {
-                            "Call": {
-                                "optionCategory": "STANDARD",
-                                "optionRootSymbol": symbol,
-                                "timeStamp": "1578063600",
-                                "adjustedFlag": False,
-                                "displaySymbol": f"{symbol}240119C00150000",
-                                "optionType": "CALL",
-                                "strikePrice": 150.0,
-                                "symbol": f"{symbol}240119C00150000",
-                                "bid": 2.50,
-                                "ask": 2.60,
-                                "bidSize": 10,
-                                "askSize": 15,
-                                "inTheMoney": "y",
-                                "volume": 100,
-                                "openInterest": 500,
-                                "netChange": 0.10,
-                                "lastPrice": 2.55,
-                                "quoteDetail": "1578063600",
-                                "osiKey": f"{symbol}240119C00150000"
-                            },
-                            "Put": {
-                                "optionCategory": "STANDARD", 
-                                "optionRootSymbol": symbol,
-                                "timeStamp": "1578063600",
-                                "adjustedFlag": False,
-                                "displaySymbol": f"{symbol}240119P00150000",
-                                "optionType": "PUT",
-                                "strikePrice": 150.0,
-                                "symbol": f"{symbol}240119P00150000",
-                                "bid": 1.20,
-                                "ask": 1.30,
-                                "bidSize": 8,
-                                "askSize": 12,
-                                "inTheMoney": "n",
-                                "volume": 50,
-                                "openInterest": 300,
-                                "netChange": -0.05,
-                                "lastPrice": 1.25,
-                                "quoteDetail": "1578063600",
-                                "osiKey": f"{symbol}240119P00150000"
-                            }
-                        }
-                    ],
-                    "timeStamp": "1578063600",
-                    "quoteType": "DELAYED",
-                    "nearPrice": 149.50,
-                    "authenticated": bool(oauth_client.access_token)
-                }
+            params = {
+                "symbol": arguments["symbol"],
             }
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
-        
+            for key in (
+                "expiryYear", "expiryMonth", "expiryDay", "strikePriceNear",
+                "noOfStrikes", "includeWeekly", "skipAdjusted",
+                "optionCategory", "chainType", "priceType",
+            ):
+                if key in arguments:
+                    params[key] = arguments[key]
+            return _ok(
+                await oauth_client.request(
+                    "GET", "/v1/market/optionchains.json", params=params
+                )
+            )
+
         elif name == "get_option_expire_dates":
-            symbol = arguments["symbol"]
-            # TODO: Use oauth_client.access_token for authenticated API calls
-            result = {
-                "OptionExpireDateResponse": {
-                    "ExpirationDate": [
-                        {
-                            "year": 2024,
-                            "month": 1,
-                            "day": 19,
-                            "expiryType": "MONTHLY"
-                        },
-                        {
-                            "year": 2024,
-                            "month": 2,
-                            "day": 16,
-                            "expiryType": "MONTHLY"
-                        },
-                        {
-                            "year": 2024,
-                            "month": 1,
-                            "day": 26,
-                            "expiryType": "WEEKLY"
-                        }
-                    ],
-                    "authenticated": bool(oauth_client.access_token)
-                }
-            }
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
-        
+            params = {"symbol": arguments["symbol"]}
+            if "expiryType" in arguments:
+                params["expiryType"] = arguments["expiryType"]
+            return _ok(
+                await oauth_client.request(
+                    "GET", "/v1/market/optionexpiredate.json", params=params
+                )
+            )
+
         elif name == "get_quotes":
             symbols = arguments["symbols"]
-            # TODO: Use oauth_client.access_token for authenticated API calls
-            result = {
-                "QuoteResponse": {
-                    "QuoteData": [
-                        {
-                            "dateTime": "15:17:00 EDT 06-20-2018",
-                            "dateTimeUTC": 1529522220,
-                            "quoteStatus": "DELAYED",
-                            "ahFlag": False,
-                            "hasMiniOptions": False,
-                            "All": {
-                                "adjustedFlag": False,
-                                "ask": 175.79,
-                                "askSize": 100,
-                                "bid": 175.29,
-                                "bidSize": 100,
-                                "changeClose": 2.68,
-                                "changeClosePercentage": 1.55,
-                                "companyName": f"{symbols.split(',')[0]} INC COM",
-                                "lastTrade": 175.74,
-                                "high": 176.28,
-                                "low": 174.76,
-                                "open": 175.31,
-                                "previousClose": 173.06,
-                                "totalVolume": 1167544,
-                                "primaryExchange": "NSDQ",
-                                "symbolDescription": f"{symbols.split(',')[0]} INC COM"
-                            }
-                        }
-                    ],
-                    "authenticated": bool(oauth_client.access_token)
-                }
+            params = {
+                k: arguments[k]
+                for k in (
+                    "detailFlag", "requireEarningsDate",
+                    "overrideSymbolCount", "skipMiniOptionsCheck",
+                )
+                if k in arguments
             }
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
-        
+            return _ok(
+                await oauth_client.request(
+                    "GET", f"/v1/market/quote/{symbols}.json", params=params
+                )
+            )
+
         elif name == "lookup_product":
             search = arguments["search"]
-            # TODO: Use oauth_client.access_token for authenticated API calls
-            result = {
-                "LookupResponse": {
-                    "Data": [
-                        {
-                            "symbol": "AAPL",
-                            "description": "APPLE INC COM",
-                            "type": "EQUITY"
-                        },
-                        {
-                            "symbol": "AABA",
-                            "description": "ALTABA INC COM", 
-                            "type": "EQUITY"
-                        }
-                    ],
-                    "authenticated": bool(oauth_client.access_token)
-                }
-            }
-            return [TextContent(type="text", text=json.dumps(result))]
+            return _ok(
+                await oauth_client.request("GET", f"/v1/market/lookup/{search}.json")
+            )
         
         elif name == "calculate_risk_parameters":
             account_id = arguments["account_id"]
             risk_percentage = arguments.get("risk_percentage", 1.0)
-            
-            # Get account balance first
-            balance_result = {
-                "accountId": account_id,
-                "institutionType": "BROKERAGE",
-                "accountType": "PDT_ACCOUNT",
-                "computedBalance": {
-                    "accountBalance": 10000.00,
-                    "cashAvailableForInvestment": 10000.00
-                }
-            }
-            
-            account_balance = balance_result["computedBalance"]["accountBalance"]
-            available_cash = balance_result["computedBalance"]["cashAvailableForInvestment"]
-            
-            # Calculate risk parameters
+            account_balance, available_cash = await _fetch_balance_numbers(account_id)
+
             max_daily_risk = account_balance * (risk_percentage / 100)
             max_position_risk = max_daily_risk
             max_positions = int(available_cash / max_position_risk) if max_position_risk > 0 else 0
-            
-            result = {
+
+            return _ok({
                 "accountId": account_id,
                 "accountBalance": account_balance,
                 "availableCash": available_cash,
@@ -703,85 +524,30 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 "maxDailyRisk": max_daily_risk,
                 "maxPositionRisk": max_position_risk,
                 "maxPositions": max_positions,
-                "authenticated": bool(oauth_client.access_token)
-            }
-            
-            return [TextContent(type="text", text=json.dumps(result))]
+            })
         
         elif name == "create_watch_list":
-            account_id = arguments["account_id"]
-            name = arguments["name"]
-            symbols = arguments.get("symbols", [])
-            
-            result = {
-                "watchListId": "WL123456",
-                "accountId": account_id,
-                "name": name,
-                "symbols": symbols,
-                "created": 1609459200000,
-                "itemCount": len(symbols),
-                "authenticated": bool(oauth_client.access_token)
-            }
-            
-            return [TextContent(type="text", text=json.dumps(result))]
-        
+            return _ok(watchlists.create(
+                arguments["account_id"],
+                arguments["name"],
+                arguments.get("symbols", []),
+            ))
+
         elif name == "get_watch_lists":
-            account_id = arguments["account_id"]
-            
-            result = {
-                "watchLists": [
-                    {
-                        "watchListId": "WL123456",
-                        "name": "Tech Stocks",
-                        "itemCount": 5,
-                        "created": 1609459200000,
-                        "symbols": ["AAPL", "GOOGL", "MSFT", "TSLA", "NVDA"]
-                    },
-                    {
-                        "watchListId": "WL789012",
-                        "name": "Dividend Stocks",
-                        "itemCount": 3,
-                        "created": 1609545600000,
-                        "symbols": ["JNJ", "PG", "KO"]
-                    }
-                ],
-                "accountId": account_id,
-                "authenticated": bool(oauth_client.access_token)
-            }
-            
-            return [TextContent(type="text", text=json.dumps(result))]
-        
+            return _ok(watchlists.list_for(arguments["account_id"]))
+
         elif name == "update_watch_list":
-            account_id = arguments["account_id"]
-            watch_list_id = arguments["watch_list_id"]
-            name = arguments.get("name", "Updated Watch List")
-            symbols = arguments.get("symbols", [])
-            
-            result = {
-                "watchListId": watch_list_id,
-                "accountId": account_id,
-                "name": name,
-                "symbols": symbols,
-                "updated": 1609459200000,
-                "itemCount": len(symbols),
-                "authenticated": bool(oauth_client.access_token)
-            }
-            
-            return [TextContent(type="text", text=json.dumps(result))]
-        
+            return _ok(watchlists.update(
+                arguments["account_id"],
+                arguments["watch_list_id"],
+                name=arguments.get("name"),
+                symbols=arguments.get("symbols"),
+            ))
+
         elif name == "delete_watch_list":
-            account_id = arguments["account_id"]
-            watch_list_id = arguments["watch_list_id"]
-            
-            result = {
-                "watchListId": watch_list_id,
-                "accountId": account_id,
-                "deleted": True,
-                "deletedTime": 1609459200000,
-                "authenticated": bool(oauth_client.access_token)
-            }
-            
-            return [TextContent(type="text", text=json.dumps(result))]
+            return _ok(watchlists.delete(
+                arguments["account_id"], arguments["watch_list_id"]
+            ))
         
         elif name == "validate_order_risk":
             account_id = arguments["account_id"]
@@ -789,16 +555,14 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             risk_amount = arguments["risk_amount"]
             risk_percentage = arguments.get("risk_percentage", 1.0)
             current_daily_loss = arguments.get("current_daily_loss", 0.0)
-            
-            # Get account balance (mock data)
-            account_balance = 10000.00
-            
-            # Validate risk
+
+            account_balance, _ = await _fetch_balance_numbers(account_id)
+
             is_valid, message = risk_manager.validate_order_risk(
-                account_id, order_value, risk_amount, account_balance, risk_percentage, current_daily_loss
+                account_id, order_value, risk_amount, account_balance,
+                risk_percentage, current_daily_loss,
             )
-            
-            result = {
+            return _ok({
                 "accountId": account_id,
                 "orderValue": order_value,
                 "riskAmount": risk_amount,
@@ -809,42 +573,29 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 "message": message,
                 "maxDailyRisk": account_balance * (risk_percentage / 100),
                 "currentDailyRisk": risk_manager.daily_risk.get(account_id, 0.0),
-                "authenticated": bool(oauth_client.access_token)
-            }
-            
-            return [TextContent(type="text", text=json.dumps(result))]
-        
+            })
+
         elif name == "get_daily_risk_status":
             account_id = arguments["account_id"]
             risk_percentage = arguments.get("risk_percentage", 1.0)
             current_daily_loss = arguments.get("current_daily_loss", 0.0)
-            
-            # Get account balance (mock data)
-            account_balance = 10000.00
-            
-            # Get risk status
-            status = risk_manager.get_daily_risk_status(account_id, account_balance, risk_percentage, current_daily_loss)
-            status["authenticated"] = bool(oauth_client.access_token)
-            
-            return [TextContent(type="text", text=json.dumps(status))]
-        
+            account_balance, _ = await _fetch_balance_numbers(account_id)
+            status = risk_manager.get_daily_risk_status(
+                account_id, account_balance, risk_percentage, current_daily_loss
+            )
+            return _ok(status)
+
         elif name == "record_actual_loss":
             account_id = arguments["account_id"]
             loss_amount = arguments["loss_amount"]
-            
-            # Record the loss
             risk_manager.record_actual_loss(account_id, loss_amount)
-            
-            result = {
+            return _ok({
                 "accountId": account_id,
                 "lossAmount": loss_amount,
                 "totalDailyLosses": risk_manager.daily_losses.get(account_id, 0.0),
                 "recorded": True,
-                "timestamp": 1609459200000,
-                "authenticated": bool(oauth_client.access_token)
-            }
-            
-            return [TextContent(type="text", text=json.dumps(result))]
+                "timestamp": int(time.time() * 1000),
+            })
         
         else:
             raise ValueError(f"Unknown tool: {name}")
@@ -854,7 +605,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
 async def main():
     async with stdio_server() as streams:
-        await app.run(*streams)
+        await app.run(*streams, app.create_initialization_options())
 
 if __name__ == "__main__":
     asyncio.run(main())

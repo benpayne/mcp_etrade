@@ -1,13 +1,19 @@
 import os
 import json
 from pathlib import Path
+from dotenv import load_dotenv
 from platformdirs import user_config_dir
 from typing import Optional, Dict, Any
+
+# Load .env: first from cwd (project local), then fall back to ~/.env
+load_dotenv()
+load_dotenv(Path.home() / ".env", override=False)
 
 class Config:
     def __init__(self):
         self.oauth_consumer_key = os.getenv("ETRADE_OAUTH_CONSUMER_KEY")
         self.oauth_consumer_secret = os.getenv("ETRADE_OAUTH_CONSUMER_SECRET")
+        self.sandbox = os.getenv("ETRADE_SANDBOX", "false").lower() in ("1", "true", "yes")
         self.config_data = self._load_config()
     
     def _load_config(self) -> Dict[str, Any]:
